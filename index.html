@@ -379,8 +379,8 @@ dialog::backdrop{background:rgba(10,14,22,.45)}
    Leave them empty to run the board without sync (edits stay on this device).
    The key is meant to be public; access is protected by sign-in rules in Supabase.
    ===================================================================== */
-const SUPABASE_URL = "https://shywphoclwzfmbvmaxlb.supabase.co/rest/v1/";   // e.g. https://abcdefghijkl.supabase.co
-const SUPABASE_KEY = "sb_publishable_PyVB9-I2TV4n1j_71ITheg_JEp3O80h";   // the "anon public" key (or the publishable key)
+const SUPABASE_URL = "";   // e.g. https://abcdefghijkl.supabase.co
+const SUPABASE_KEY = "";   // the "anon public" key (or the publishable key)
 
 /* The research content (insights, quotes, patterns, participants) is stored in Supabase,
    in the board_content table, and only loads after sign-in. */
@@ -979,7 +979,7 @@ function setStatus(kind, msg){
 async function initSync(){
   if (!SUPABASE_URL || !SUPABASE_KEY){ setStatus("local"); GATE = { kind:"noconfig" }; render(); return; }
   if (!window.supabase || !window.supabase.createClient){ setStatus("error","Couldn’t load the sync library"); GATE = { kind:"error", msg:"The Supabase library didn’t load. Check your connection and reload." }; render(); return; }
-  try { SYNC.client = window.supabase.createClient(SUPABASE_URL.trim(), SUPABASE_KEY.trim()); }
+  try { SYNC.client = window.supabase.createClient(SUPABASE_URL.trim().replace(/\/(rest|auth)\/v1.*$/,"").replace(/\/+$/,""), SUPABASE_KEY.trim()); }
   catch(e){ setStatus("error","Check SUPABASE_URL and SUPABASE_KEY in the file"); GATE = { kind:"error", msg:"The Supabase URL or key in this file looks wrong." }; render(); return; }
   const { data } = await SYNC.client.auth.getSession();
   SYNC.user = data && data.session ? data.session.user : null;
