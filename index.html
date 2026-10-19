@@ -379,8 +379,8 @@ dialog::backdrop{background:rgba(10,14,22,.45)}
    Leave them empty to run the board without sync (edits stay on this device).
    The key is meant to be public; access is protected by sign-in rules in Supabase.
    ===================================================================== */
-const SUPABASE_URL = "https://shywphoclwzfmbvmaxlb.supabase.co";   // e.g. https://abcdefghijkl.supabase.co
-const SUPABASE_KEY = "sb_publishable_PyVB9-I2TV4n1j_71ITheg_JEp3O80h";   // the "anon public" key (or the publishable key)
+const SUPABASE_URL = "";   // e.g. https://abcdefghijkl.supabase.co
+const SUPABASE_KEY = "";   // the "anon public" key (or the publishable key)
 
 /* The research content (insights, quotes, patterns, participants) is stored in Supabase,
    in the board_content table, and only loads after sign-in. */
@@ -551,7 +551,7 @@ function panelHtml(ins){
     <ul class="ev">${ordered.map(([e,ix])=>{
       const key = ins.id+":"+ix, raw = state.raw.has(key);
       return `<li class="q"><blockquote class="${raw?"raw":""}">${raw?esc(e[4]):"“"+esc(e[3])+"”"}</blockquote>
-        <div class="qmeta"><b>${esc(pName(e))}</b>${PEOPLE[e[0]] && !/^written/i.test(e[1]||"") ? `<a href="${docUrl(e[0],e[2])}" target="_blank" rel="noopener" title="${e[2]?"Open the transcript at this timestamp":"Open the transcript"}">${e[2] ? esc(e[1])+" in transcript" : (e[1] ? esc(e[1])+" · open transcript" : "Open transcript")} ↗</a>` : (e[1] ? `<span>${esc(e[1])}</span>` : "")}
+        <div class="qmeta"><b>${esc(pName(e))}</b>${/^https?:\/\//.test(e[2]||"") ? `<a href="${esc(e[2])}" target="_blank" rel="noopener" title="Open the source document">${esc(e[1]||"Source")} ↗</a>` : PEOPLE[e[0]] && !/^written/i.test(e[1]||"") ? `<a href="${docUrl(e[0],e[2])}" target="_blank" rel="noopener" title="${e[2]?"Open the transcript at this timestamp":"Open the transcript"}">${e[2] ? esc(e[1])+" in transcript" : (e[1] ? esc(e[1])+" · open transcript" : "Open transcript")} ↗</a>` : (e[1] ? `<span>${esc(e[1])}</span>` : "")}
         ${e[4]?`<button class="linkbtn" data-raw="${key}">${raw?"Show edited":"Show original"}</button>`:""}</div></li>`;
     }).join("")}</ul>
     <div class="field"><label for="n-${ins.id}">Why it matters ${editedNote?`<span class="edited">${byLine("i",ins.id,"note")} · <button data-revert="${ins.id}:note">revert</button></span>`:''}</label>
