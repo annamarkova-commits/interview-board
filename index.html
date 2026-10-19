@@ -118,6 +118,38 @@ a{color:var(--accent)}
 .tip.below{bottom:auto;top:calc(100% + 8px)}
 .tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--ink)}
 
+/* ---------- add / edit form ---------- */
+.rbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tag.added{background:var(--lo-soft);color:var(--lo);border-color:transparent;font-weight:600}
+.addedby{margin:-6px 0 12px;color:var(--faint);font-size:13px}
+.muted{color:var(--muted)}
+.pactions{display:flex;gap:8px;margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
+.btn.danger{color:var(--hi);border-color:color-mix(in srgb,var(--hi) 35%,var(--line))}
+.btn.danger:hover{background:var(--hi-soft)}
+.iform{display:flex;flex-direction:column;gap:14px}
+.iform>label,.iform .two label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+.iform input:not([type=checkbox]),.iform select,.iform textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14.5px;font-weight:400;color:var(--ink);background:var(--surface);width:100%}
+.iform textarea{resize:vertical;line-height:1.5}
+.iform input:focus,.iform select:focus,.iform textarea:focus{outline:none;border-color:var(--accent)}
+.iform .two{display:grid;grid-template-columns:1fr 160px;gap:12px}
+.iform fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px 12px;margin:0}
+.iform legend{font-size:13px;font-weight:600;color:var(--muted);padding:0 4px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:14px;font-weight:400;color:var(--ink)}
+.chk input{margin-top:3px;flex:none}
+.chkgrid{display:flex;flex-direction:column;gap:6px}
+.chkgrid.pats{max-height:220px;overflow:auto}
+.evrow{border-bottom:1px solid var(--line);padding:10px 0;display:flex;flex-direction:column;gap:8px}
+.evrow:first-child{padding-top:2px}
+.evtop{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
+.evtop .fName{grid-column:1/2}
+.evtop .fCand+.fName:not([hidden])~.fTs{grid-column:2/3}
+.formbar{display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:-40px;background:var(--surface);padding:12px 0 4px;border-top:1px solid var(--line)}
+.dlist{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 16px}
+.drow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
+.drow:last-child{border-bottom:0}
+.drow .st{font-weight:600}.drow .tp{font-size:12.5px;color:var(--faint)}
+@media (max-width:600px){ .iform .two{grid-template-columns:1fr} .evtop{grid-template-columns:1fr auto} .evtop .fTs{grid-column:1/2} }
+
 /* ---------- gate ---------- */
 .gate{max-width:520px;margin:12vh auto 0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 28px 24px;text-align:left}
 .gate h2{margin:0 0 8px;font-size:21px}
@@ -347,8 +379,8 @@ dialog::backdrop{background:rgba(10,14,22,.45)}
    Leave them empty to run the board without sync (edits stay on this device).
    The key is meant to be public; access is protected by sign-in rules in Supabase.
    ===================================================================== */
-const SUPABASE_URL = "https://shywphoclwzfmbvmaxlb.supabase.co";   // e.g. https://abcdefghijkl.supabase.co
-const SUPABASE_KEY = "sb_publishable_PyVB9-I2TV4n1j_71ITheg_JEp3O80h";   // the "anon public" key (or the publishable key)
+const SUPABASE_URL = "";   // e.g. https://abcdefghijkl.supabase.co
+const SUPABASE_KEY = "";   // the "anon public" key (or the publishable key)
 
 /* The research content (insights, quotes, patterns, participants) is stored in Supabase,
    in the board_content table, and only loads after sign-in. */
@@ -359,17 +391,36 @@ let DOCS = {}, PEOPLE = {}, ORDER = [], TOPICS = [], HYPS = {}, INSIGHTS = [], P
 const LS_KEY = "elevate-activation-board-v1";
 const IMP_LABEL = { H:"High", M:"Medium", L:"Low" };
 const IMP_SCORE = { H:3, M:2, L:1 };
-let TOPIC_NAME = {}, TOPIC_HUE = {}, INS_BY_ID = {}, PAT_OF = {};
+let TOPIC_NAME = {}, TOPIC_HUE = {}, INS_BY_ID = {}, PAT_OF = {}, DELETED = [];
+let BASE = null, CUSTOM = {}, CUSTOM_ON = false;
 let READY = false, GATE = { kind:"loading" };
 function setContent(c){
-  ({ DOCS, PEOPLE, ORDER, TOPICS, HYPS, INSIGHTS, PATTERNS } = c);
+  BASE = c; ({ DOCS, PEOPLE, ORDER, HYPS } = c);
+  rebuild(); READY = true;
+}
+/* Merge the base content with insights the team added or deleted (board_insights table). */
+function rebuild(){
+  if (!BASE) return;
+  TOPICS = BASE.TOPICS.slice();
+  const known = new Set(TOPICS.map(t=>t[0]));
+  const rows = Object.entries(CUSTOM);
+  const customs = rows.filter(([,r])=>r.data && !r.deleted).map(([id,r])=>{
+    const d = Object.assign({ t:"", topic:"other", imp:"M", hyp:[], ev:[], note:"", design:"", patterns:[] }, r.data);
+    if (!known.has(d.topic)) d.topic = "other";
+    return Object.assign(d, { id, custom:true, by:r.created_by, at:r.created_at });
+  });
+  if (customs.some(c=>c.topic==="other")) TOPICS.push(["other","Other"]);
+  const gone = new Set(rows.filter(([,r])=>r.deleted).map(([id])=>id));
+  INSIGHTS = BASE.INSIGHTS.filter(i=>!gone.has(i.id)).concat(customs);
+  DELETED = BASE.INSIGHTS.filter(i=>gone.has(i.id)).map(i=>Object.assign({}, i, { delBy:CUSTOM[i.id].updated_by, delAt:CUSTOM[i.id].updated_at }))
+    .concat(rows.filter(([,r])=>r.deleted && r.data).map(([id,r])=>Object.assign({}, r.data, { id, custom:true, delBy:r.updated_by, delAt:r.updated_at })));
+  INS_BY_ID = Object.fromEntries(INSIGHTS.map(i=>[i.id,i]));
+  PATTERNS = BASE.PATTERNS.map(p=>Object.assign({}, p, { ins: p.ins.filter(id=>INS_BY_ID[id]).concat(customs.filter(c=>(c.patterns||[]).includes(p.id)).map(c=>c.id)) }));
   TOPIC_NAME = Object.fromEntries(TOPICS);
   TOPIC_HUE = Object.fromEntries(TOPICS.map((t,i)=>[t[0], Math.round(i*360/TOPICS.length)]));
-  INS_BY_ID = Object.fromEntries(INSIGHTS.map(i=>[i.id,i]));
   PAT_OF = {}; PATTERNS.forEach(p=>p.ins.forEach(id=>{(PAT_OF[id] ||= []).push(p.id)}));
-  READY = true;
 }
-function clearContent(){ DOCS = {}; PEOPLE = {}; ORDER = []; TOPICS = []; HYPS = {}; INSIGHTS = []; PATTERNS = []; TOPIC_NAME = {}; TOPIC_HUE = {}; INS_BY_ID = {}; PAT_OF = {}; READY = false; }
+function clearContent(){ DOCS = {}; PEOPLE = {}; ORDER = []; TOPICS = []; HYPS = {}; INSIGHTS = []; PATTERNS = []; TOPIC_NAME = {}; TOPIC_HUE = {}; INS_BY_ID = {}; PAT_OF = {}; DELETED = []; BASE = null; CUSTOM = {}; READY = false; }
 
 let EDITS = loadEdits();
 const state = {
@@ -389,7 +440,9 @@ function impOf(ins){ return (EDITS.i[ins.id] && EDITS.i[ins.id].imp) || ins.imp;
 function fieldOf(ins, f){ const e = EDITS.i[ins.id]; return (e && e[f] !== undefined) ? e[f] : ins[f]; }
 function patField(p, f){ const e = EDITS.p[p.id]; return (e && e[f] !== undefined) ? e[f] : p[f]; }
 function speakers(ins){ const s = new Set(ins.ev.map(e=>e[0])); return ORDER.filter(id=>s.has(id)); }
-function docUrl(cand, anchor){ const d = DOCS[PEOPLE[cand].doc]; return `https://docs.google.com/document/d/${d.id}/edit?tab=${d.tab}#heading=h.${anchor}`; }
+function docUrl(cand, anchor){ const d = DOCS[PEOPLE[cand].doc]; return `https://docs.google.com/document/d/${d.id}/edit?tab=${d.tab}` + (anchor ? `#heading=h.${anchor}` : ""); }
+function pName(e){ return PEOPLE[e[0]] ? PEOPLE[e[0]].n : (e[5] || "Unattributed"); }
+function pShort(e){ return PEOPLE[e[0]] ? PEOPLE[e[0]].s : (e[5] || "Unattributed"); }
 
 function mtag(set, label, text){
   const ids = ORDER.filter(id=>set.has(id));
@@ -419,7 +472,7 @@ function insMatches(ins){
   const sp = speakers(ins);
   if (state.cands.size && !sp.some(c=>state.cands.has(c))) return false;
   if (state.q){
-    const hay = [ins.t, fieldOf(ins,"note"), fieldOf(ins,"design"), ...ins.ev.map(e=>e[3]+" "+PEOPLE[e[0]].n)].join(" ");
+    const hay = [ins.t, fieldOf(ins,"note"), fieldOf(ins,"design"), ...ins.ev.map(e=>e[3]+" "+pName(e))].join(" ");
     if (!matchQ(hay)) return false;
   }
   return true;
@@ -464,15 +517,16 @@ function renderSide(){
 
 /* ---------- insights view ---------- */
 function insightCard(ins){
-  const sp = speakers(ins), lvl = impOf(ins), first = ins.ev[0];
+  const sp = speakers(ins), lvl = impOf(ins), first = ins.ev.find(e=>e[3]);
   return `<article class="card imp-${lvl}${state.panel===ins.id?" active":""}" id="ins-${ins.id}" data-openins="${ins.id}" tabindex="0" role="button" aria-label="Open details: ${esc(ins.t)}">
-    <h3>${esc(ins.t)}</h3>
-    <p class="snip">“${esc(first[3])}” <b>${esc(PEOPLE[first[0]].s)}</b></p>
+    <h3>${esc(ins.t || "Untitled insight")}</h3>
+    ${first ? `<p class="snip">“${esc(first[3])}” <b>${esc(pShort(first))}</b></p>` : (fieldOf(ins,"note") ? `<p class="snip" style="font-style:normal;font-family:var(--sans)">${esc(fieldOf(ins,"note"))}</p>` : "")}
     <div class="tagrow">
       <span class="ipill ${lvl}">${IMP_LABEL[lvl]}</span>
       ${mtag(new Set(sp),"mentioned")}
-      ${ins.split?'<span class="tag split">Split view</span>':''}
+      ${ins.split?'<span class="tag split">Opinions differ</span>':''}
       ${(ins.hyp||[]).map(h=>`<span class="tag hyp" title="${esc(HYPS[h])}">${h}</span>`).join("")}
+      ${ins.custom?'<span class="tag added">Added</span>':''}
     </div>
   </article>`;
 }
@@ -483,26 +537,137 @@ function panelHtml(ins){
   const editedDesign = EDITS.i[ins.id] && EDITS.i[ins.id].design !== undefined;
   const pats = (PAT_OF[ins.id]||[]).map(pid=>PATTERNS.find(p=>p.id===pid));
   const ordered = state.cands.size ? ins.ev.map((e,ix)=>[e,ix]).sort((a,b)=>(state.cands.has(b[0][0])-state.cands.has(a[0][0]))) : ins.ev.map((e,ix)=>[e,ix]);
-  return `<h2 id="pTitle">${esc(ins.t)}</h2>
+  return `<h2 id="pTitle">${esc(ins.t || "Untitled insight")}</h2>
+    ${ins.custom?`<p class="addedby">Added by ${esc(shortName(ins.by))}${ins.at?", "+relTime(ins.at):""}</p>`:""}
     <div class="tagrow">
       <select class="impsel ${lvl}" data-impset="${ins.id}" aria-label="Impact">${["H","M","L"].map(l=>`<option value="${l}" ${l===lvl?"selected":""}>${IMP_LABEL[l]} impact</option>`).join("")}</select>
       ${SYNC.meta["i:"+ins.id+":imp"]?`<span class="by" style="font-size:12.5px">${byLine("i",ins.id,"imp").replace("edited","set")}</span>`:""}
       ${mtag(new Set(sp),"mentioned").replace('class="tip"','class="tip below"')}
-      ${ins.split?'<span class="tag split">Split view</span>':''}
+      ${ins.split?'<span class="tag split">Opinions differ</span>':''}
       ${(ins.hyp||[]).map(h=>`<span class="tag hyp" title="${esc(HYPS[h])}">${h} · ${esc(HYPS[h])}</span>`).join("")}
     </div>
-    <div class="sect">Evidence · ${ins.ev.length} quote${ins.ev.length>1?"s":""}</div>
+    <div class="sect">Evidence · ${ins.ev.length} quote${ins.ev.length===1?"":"s"}</div>
+    ${ins.ev.length?"":`<p class="muted">No quotes yet.${ins.custom&&CUSTOM_ON?" Use “Edit insight” to add some.":""}</p>`}
     <ul class="ev">${ordered.map(([e,ix])=>{
       const key = ins.id+":"+ix, raw = state.raw.has(key);
       return `<li class="q"><blockquote class="${raw?"raw":""}">${raw?esc(e[4]):"“"+esc(e[3])+"”"}</blockquote>
-        <div class="qmeta"><b>${esc(PEOPLE[e[0]].n)}</b><a href="${docUrl(e[0],e[2])}" target="_blank" rel="noopener" title="Open the transcript at this timestamp">${e[1]} in transcript ↗</a>
-        <button class="linkbtn" data-raw="${key}">${raw?"Show edited":"Show original"}</button></div></li>`;
+        <div class="qmeta"><b>${esc(pName(e))}</b>${PEOPLE[e[0]] ? `<a href="${docUrl(e[0],e[2])}" target="_blank" rel="noopener" title="${e[2]?"Open the transcript at this timestamp":"Open the transcript"}">${e[2] ? esc(e[1])+" in transcript" : (e[1] ? esc(e[1])+" · open transcript" : "Open transcript")} ↗</a>` : (e[1] ? `<span>${esc(e[1])}</span>` : "")}
+        ${e[4]?`<button class="linkbtn" data-raw="${key}">${raw?"Show edited":"Show original"}</button>`:""}</div></li>`;
     }).join("")}</ul>
     <div class="field"><label for="n-${ins.id}">Why it matters ${editedNote?`<span class="edited">${byLine("i",ins.id,"note")} · <button data-revert="${ins.id}:note">revert</button></span>`:''}</label>
       <textarea class="edit" id="n-${ins.id}" data-edit="${ins.id}:note" rows="2">${esc(fieldOf(ins,"note"))}</textarea></div>
     <div class="field"><label for="d-${ins.id}">What it means for design ${editedDesign?`<span class="edited">${byLine("i",ins.id,"design")} · <button data-revert="${ins.id}:design">revert</button></span>`:''}</label>
       <textarea class="edit" id="d-${ins.id}" data-edit="${ins.id}:design" rows="2">${esc(fieldOf(ins,"design"))}</textarea></div>
-    ${pats.length?`<div class="sect">Part of pattern</div>${pats.map(p=>`<button class="linkbtn" style="font-size:14px;display:block;margin-bottom:4px" data-gopat="${p.id}">${esc(p.t)}</button>`).join("")}`:''}`;
+    ${pats.length?`<div class="sect">Part of pattern</div>${pats.map(p=>`<button class="linkbtn" style="font-size:14px;display:block;margin-bottom:4px" data-gopat="${p.id}">${esc(p.t)}</button>`).join("")}`:''}
+    ${CUSTOM_ON?`<div class="pactions">${ins.custom?`<button class="btn" data-editins="${ins.id}">Edit insight</button>`:""}<button class="btn danger" data-delins="${ins.id}">Delete insight</button></div>`:""}`;
+}
+
+/* ---------- add / edit form ---------- */
+function evRow(e){
+  e = e || ["", "", null, "", "", ""];
+  const known = !!PEOPLE[e[0]], other = !known && (e[5] || e[0]==="other");
+  return `<div class="evrow">
+    <div class="evtop">
+      <select class="fCand" aria-label="Who said it"><option value="">Who said it?</option>${ORDER.map(id=>`<option value="${id}" ${e[0]===id?"selected":""}>${esc(PEOPLE[id].n)}</option>`).join("")}<option value="other" ${other?"selected":""}>Someone else…</option></select>
+      <input class="fName" placeholder="Name" value="${esc(e[5]||"")}" ${other?"":"hidden"} aria-label="Name">
+      <input class="fTs" placeholder="Timestamp, e.g. 00:12:30" value="${esc(e[1]||"")}" aria-label="Timestamp">
+      <button type="button" class="linkbtn fDel">Remove</button>
+    </div>
+    <textarea class="fQ" rows="2" placeholder="Quote" aria-label="Quote">${esc(e[3]||"")}</textarea>
+  </div>`;
+}
+function formHtml(d, isNew){
+  const topics = BASE.TOPICS.concat([["other","Other"]]);
+  return `<h2 id="pTitle">${isNew?"New insight":"Edit insight"}</h2>
+    <p class="muted" style="margin:-4px 0 16px">Everything is optional — fill in what you know and edit it later.</p>
+    <form id="insForm" class="iform" autocomplete="off">
+      <label>Insight name<input id="fT" value="${esc(d.t||"")}" placeholder="What did people say, in one line?"></label>
+      <div class="two">
+        <label>Topic<select id="fTopic">${topics.map(([id,n])=>`<option value="${id}" ${d.topic===id?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
+        <label>Impact<select id="fImp">${["H","M","L"].map(l=>`<option value="${l}" ${d.imp===l?"selected":""}>${IMP_LABEL[l]}</option>`).join("")}</select></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="fSplit" ${d.split?"checked":""}> Opinions differ on this</label>
+      <fieldset><legend>Hypotheses</legend><div class="chkgrid">${Object.entries(HYPS).map(([k,v])=>`<label class="chk"><input type="checkbox" class="fHyp" value="${k}" ${(d.hyp||[]).includes(k)?"checked":""}> <span><b>${k}</b> ${esc(v)}</span></label>`).join("")}</div></fieldset>
+      <fieldset><legend>Evidence</legend><div id="fEv">${(d.ev&&d.ev.length?d.ev:[null]).map(evRow).join("")}</div>
+        <button type="button" class="btn" id="fAddEv">Add another quote</button>
+        <p class="muted" style="font-size:13px;margin:8px 0 0">For the eight participants, the board links to their transcript. Exact timestamp links can be added later.</p></fieldset>
+      <label>Why it matters<textarea id="fNote" rows="3">${esc(d.note||"")}</textarea></label>
+      <label>What it means for design<textarea id="fDesign" rows="3">${esc(d.design||"")}</textarea></label>
+      <fieldset><legend>Add to patterns</legend><div class="chkgrid pats">${BASE.PATTERNS.map(p=>`<label class="chk"><input type="checkbox" class="fPat" value="${p.id}" ${(d.patterns||[]).includes(p.id)?"checked":""}> <span>${esc(p.t)}</span></label>`).join("")}</div></fieldset>
+      <p class="autherr" id="fErr" role="alert"></p>
+      <div class="formbar"><button type="button" class="btn" id="fCancel">Cancel</button><button type="submit" class="btn primary" id="fSave">${isNew?"Add insight":"Save changes"}</button></div>
+    </form>`;
+}
+function openForm(id){
+  const isNew = !id;
+  const d = isNew ? { topic: state.topics.size===1 ? [...state.topics][0] : "other", imp:"M" } : JSON.parse(JSON.stringify(CUSTOM[id].data));
+  state.form = { id: id || null }; state.formDirty = false;
+  const wasOpen = document.getElementById("panel").classList.contains("on");
+  if (!wasOpen) lastFocus = document.activeElement;
+  document.getElementById("pTopic").textContent = isNew ? "Add an insight" : "Edit insight";
+  document.getElementById("pPos").textContent = "";
+  document.getElementById("pPrev").disabled = true; document.getElementById("pNext").disabled = true;
+  const body = document.getElementById("pBody"); body.innerHTML = formHtml(d, isNew); body.dataset.id = ""; body.scrollTop = 0;
+  const panel = document.getElementById("panel");
+  panel.classList.add("on"); panel.setAttribute("aria-hidden","false");
+  document.getElementById("scrim").classList.add("on"); document.body.classList.add("locked");
+  setTimeout(()=>document.getElementById("fT").focus(), 40);
+}
+function readForm(){
+  const v = s => document.getElementById(s).value.trim();
+  const ev = [...document.querySelectorAll("#fEv .evrow")].map(r=>{
+    const cand = r.querySelector(".fCand").value, name = r.querySelector(".fName").value.trim();
+    const ts = r.querySelector(".fTs").value.trim(), q = r.querySelector(".fQ").value.trim();
+    if (!q && !ts && !cand) return null;
+    return cand === "other" || !cand ? ["other", ts, null, q, "", name] : [cand, ts, null, q, "", ""];
+  }).filter(Boolean);
+  return { t:v("fT"), topic:v("fTopic"), imp:v("fImp"), split:document.getElementById("fSplit").checked,
+    hyp:[...document.querySelectorAll(".fHyp:checked")].map(x=>x.value), ev, note:v("fNote"), design:v("fDesign"),
+    patterns:[...document.querySelectorAll(".fPat:checked")].map(x=>x.value) };
+}
+async function submitForm(){
+  const d = readForm(), id = state.form.id || ("u" + Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+  const btn = document.getElementById("fSave"); btn.disabled = true; btn.textContent = "Saving…";
+  const prev = CUSTOM[id];
+  CUSTOM[id] = Object.assign({}, prev, { data:d, deleted:false, created_by: prev ? prev.created_by : SYNC.user.email, created_at: prev ? prev.created_at : new Date().toISOString() });
+  const ok = await saveCustom(id);
+  if (!ok){ if (prev) CUSTOM[id] = prev; else delete CUSTOM[id]; btn.disabled = false; btn.textContent = "Try again"; document.getElementById("fErr").textContent = "Couldn’t save the insight. Check your connection and try again."; return; }
+  state.form = null; rebuild(); render(true); openPanel(id, visibleInsightOrder()); toast(prev ? "Insight updated" : "Insight added");
+}
+async function saveCustom(id){
+  const r = CUSTOM[id]; SYNC.cdirty.add(id); setStatus("saving");
+  const { error } = await SYNC.client.from("board_insights").upsert({ id, data:r.data, deleted:!!r.deleted }, { onConflict:"id" });
+  SYNC.cdirty.delete(id);
+  if (error){ setStatus("error","Insight wasn’t saved: "+error.message); return false; }
+  setStatus("synced"); return true;
+}
+let customTimers = {};
+function queueCustom(id){ SYNC.cdirty.add(id); clearTimeout(customTimers[id]); customTimers[id] = setTimeout(()=>saveCustom(id), 700); }
+async function deleteInsight(id){
+  const ins = INS_BY_ID[id]; if (!ins) return;
+  if (!confirm(`Delete “${ins.t || "Untitled insight"}”? Anyone on the team can restore it from Deleted insights.`)) return;
+  const prev = CUSTOM[id];
+  CUSTOM[id] = ins.custom ? Object.assign({}, prev, { deleted:true, updated_by:SYNC.user.email, updated_at:new Date().toISOString() })
+                          : { data:null, deleted:true, updated_by:SYNC.user.email, updated_at:new Date().toISOString() };
+  const ok = await saveCustom(id);
+  if (!ok){ if (prev) CUSTOM[id] = prev; else delete CUSTOM[id]; toast("Couldn’t delete — check your connection"); return; }
+  closePanel(true); rebuild(); render(true); toast("Insight deleted. Restore it from Deleted insights.");
+}
+async function restoreInsight(id){
+  const r = CUSTOM[id]; if (!r) return;
+  setStatus("saving");
+  let error;
+  if (r.data){ CUSTOM[id] = Object.assign({}, r, { deleted:false }); ({ error } = await SYNC.client.from("board_insights").upsert({ id, data:r.data, deleted:false }, { onConflict:"id" })); }
+  else { delete CUSTOM[id]; ({ error } = await SYNC.client.from("board_insights").delete().eq("id", id)); }
+  if (error){ CUSTOM[id] = r; setStatus("error","Restore failed: "+error.message); toast("Couldn’t restore — check your connection"); return; }
+  setStatus("synced"); rebuild(); if (!DELETED.length) state.showDeleted = false; render(true); toast("Insight restored");
+}
+function renderDeleted(){
+  return `<div class="resultbar"><p>${DELETED.length} deleted insight${DELETED.length===1?"":"s"}. Restoring puts an insight back where it was, with its impact and notes.</p>
+    <button class="btn" data-showdel="0">Back to insights</button></div>
+    <div class="dlist">${DELETED.map(i=>`<div class="drow"><div><div class="st">${esc(i.t || "Untitled insight")}</div>
+      <div class="tp">${esc(TOPIC_NAME[i.topic] || "Other")}${i.delBy?` · deleted by ${esc(shortName(i.delBy))}${i.delAt?", "+relTime(i.delAt):""}`:""}</div></div>
+      <button class="btn" data-restore="${i.id}">Restore</button></div>`).join("")}</div>`;
 }
 
 let lastFocus = null;
@@ -528,15 +693,17 @@ function openPanel(id, list){
   document.querySelectorAll(".card.active").forEach(c=>c.classList.remove("active"));
   const card = document.getElementById("ins-"+id); if (card) card.classList.add("active");
 }
-function closePanel(){
+function closePanel(force){
   const panel = document.getElementById("panel"); if (!panel.classList.contains("on")) return;
+  if (state.form && state.formDirty && force!==true && !confirm("Discard this insight? Your changes won’t be saved.")) return;
+  state.form = null;
   cleanup(); saveEdits();
   panel.classList.remove("on"); panel.setAttribute("aria-hidden","true");
   document.getElementById("scrim").classList.remove("on"); document.body.classList.remove("locked");
   state.panel = null; if (READY) render(true);
   if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
 }
-function stepPanel(d){ const L = state.panelList||[], ix = L.indexOf(state.panel); if (ix<0) return; const n = L[ix+d]; if (n) openPanel(n); }
+function stepPanel(d){ if (state.form) return; const L = state.panelList||[], ix = L.indexOf(state.panel); if (ix<0) return; const n = L[ix+d]; if (n) openPanel(n); }
 function visibleInsightOrder(){ const list = INSIGHTS.filter(insMatches); const out = []; TOPICS.forEach(([tid])=>sortIns(list.filter(i=>i.topic===tid)).forEach(i=>out.push(i.id))); return out; }
 
 function sortIns(list){
@@ -548,9 +715,11 @@ function sortIns(list){
 }
 
 function renderInsights(){
+  if (state.showDeleted) return renderDeleted();
   const list = INSIGHTS.filter(insMatches);
   let html = `<div class="resultbar"><p>${list.length} of ${INSIGHTS.length} insights${anyFilter()?" match your filters":""}, grouped by topic.</p>
-    <label>Sort within topic <select class="sortsel" id="sortSel"><option value="mentions" ${state.sort==="mentions"?"selected":""}>Most mentioned</option><option value="impact" ${state.sort==="impact"?"selected":""}>Highest impact</option></select></label></div>`;
+    <span class="rbtns">${CUSTOM_ON?'<button class="btn primary" data-newins="1">New insight</button>':''}${CUSTOM_ON&&DELETED.length?`<button class="btn" data-showdel="1">Deleted insights (${DELETED.length})</button>`:''}
+    <label>Sort within topic <select class="sortsel" id="sortSel"><option value="mentions" ${state.sort==="mentions"?"selected":""}>Most mentioned</option><option value="impact" ${state.sort==="impact"?"selected":""}>Highest impact</option></select></label></span></div>`;
   if (!list.length) html += `<div class="empty">No insights match these filters. Remove a filter or clear them all to see more.</div>`;
   TOPICS.forEach(([tid,tname])=>{
     const items = sortIns(list.filter(i=>i.topic===tid));
@@ -572,7 +741,7 @@ function patternCard(p){
     <div class="weight"><div class="big">${st.cands.size}<span>/8</span></div><small>people across ${p.ins.length} insight${p.ins.length>1?"s":""}</small></div>
     <div class="body">
       <h3>${esc(p.t)}</h3>
-      ${p.split?'<span class="tag split">Split view — participants disagree</span>':''}
+      ${p.split?'<span class="tag split">Opinions differ</span>':''}
       <div class="who">${(()=>{ const mo=[...st.cands].filter(c=>PEOPLE[c].seg==="Media Ops").length, s=st.cands.size-mo; return mtag(st.cands,"",`${mo} Media Ops, ${s} Strategy`).replace('class="tip"','class="tip below"'); })()}</div>
       <div class="field"><label for="ps-${p.id}">What people said ${sumEdited?`<span class="edited">${byLine("p",p.id,"summary")} · <button data-prevert="${p.id}:summary">revert</button></span>`:''}</label>
         <textarea class="edit" id="ps-${p.id}" data-pedit="${p.id}:summary" rows="2">${esc(patField(p,"summary"))}</textarea></div>
@@ -588,7 +757,7 @@ function patternCard(p){
     ${open?`<div class="subins">${subs.map(ins=>{
       const sp = speakers(ins), l = impOf(ins);
       return `<div class="subrow"><span class="dot ${l}" title="${IMP_LABEL[l]} impact"></span>
-        <div><div class="st">${esc(ins.t)}</div><div class="sq">“${esc(ins.ev[0][3])}” — ${esc(PEOPLE[ins.ev[0][0]].s)}</div><div class="tp">${esc(TOPIC_NAME[ins.topic])}</div></div>
+        <div><div class="st">${esc(ins.t)}</div>${ins.ev[0]&&ins.ev[0][3]?`<div class="sq">“${esc(ins.ev[0][3])}” — ${esc(pShort(ins.ev[0]))}</div>`:""}<div class="tp">${esc(TOPIC_NAME[ins.topic])}</div></div>
         <span class="mcount m2">${sp.length}<span>/8</span></span>
         <button class="btn m2" data-goins="${ins.id}" data-pat="${p.id}">Open insight</button></div>`;
     }).join("")}</div>`:''}
@@ -669,6 +838,14 @@ document.addEventListener("click", e=>{
   if (d.more){ toggle(state.open, d.more); render(true); return; }
   if (d.raw){ toggle(state.raw, d.raw); openPanel(state.panel); return; }
   if (d.patopen){ toggle(state.patOpen, d.patopen); render(true); return; }
+  if (d.newins){ openForm(null); return; }
+  if (d.editins){ openForm(d.editins); return; }
+  if (d.delins){ deleteInsight(d.delins); return; }
+  if (d.restore){ restoreInsight(d.restore); return; }
+  if (d.showdel){ state.showDeleted = d.showdel==="1"; render(); window.scrollTo(0,0); return; }
+  if (b.id==="fAddEv"){ const w = document.getElementById("fEv"); w.insertAdjacentHTML("beforeend", evRow()); w.lastElementChild.querySelector(".fCand").focus(); state.formDirty = true; return; }
+  if (b.classList.contains("fDel")){ const rows = document.querySelectorAll("#fEv .evrow"); if (rows.length>1) b.closest(".evrow").remove(); else b.closest(".evrow").outerHTML = evRow(); state.formDirty = true; return; }
+  if (b.id==="fCancel"){ closePanel(); return; }
   if (d.goins){ const p = PATTERNS.find(x=>x.id===d.pat); openPanel(d.goins, p ? p.ins.slice().sort((a,b)=>speakers(INS_BY_ID[b]).length-speakers(INS_BY_ID[a]).length) : [d.goins]); return; }
   if (d.gopat){ closePanel(); state.tab="patterns"; clearFilters(); state.patOpen.add(d.gopat); render(); flash("pat-"+d.gopat); return; }
   if (d.revert){ const [id,f] = d.revert.split(":"); if (EDITS.i[id]) { delete EDITS.i[id][f]; cleanup(); saveEdits(); queueWrite("i",id,f,0); } openPanel(id); return; }
@@ -684,6 +861,9 @@ function goToInsight(id){ state.tab="insights"; clearFilters(); state.open.add(i
 
 document.addEventListener("change", e=>{
   const t = e.target;
+  if (t.classList && t.classList.contains("fCand")){ const n = t.closest(".evrow").querySelector(".fName"); n.hidden = t.value!=="other"; if (!n.hidden) n.focus(); return; }
+  if (t.dataset.impset && INS_BY_ID[t.dataset.impset].custom){ const id = t.dataset.impset;
+    CUSTOM[id].data.imp = t.value; rebuild(); queueCustom(id); render(true); openPanel(id); toast(`Impact set to ${IMP_LABEL[t.value]}`); return; }
   if (t.dataset.impset){ const id = t.dataset.impset, ins = INS_BY_ID[id];
     EDITS.i[id] = EDITS.i[id] || {};
     if (t.value === ins.imp) delete EDITS.i[id].imp; else EDITS.i[id].imp = t.value;
@@ -698,6 +878,11 @@ let saveTimer;
 document.addEventListener("input", e=>{
   const t = e.target;
   if (t.id==="q"){ state.q = t.value; clearTimeout(render._t); render._t = setTimeout(()=>{ render(true); const q=document.getElementById("q"); q.focus(); q.setSelectionRange(q.value.length,q.value.length); }, 220); return; }
+  if (state.form && t.closest && t.closest("#insForm")){ state.formDirty = true; return; }
+  if (t.dataset.edit && INS_BY_ID[t.dataset.edit.split(":")[0]].custom){
+    autosize(t); const [id,f] = t.dataset.edit.split(":");
+    CUSTOM[id].data[f] = t.value; INS_BY_ID[id][f] = t.value; queueCustom(id); return;
+  }
   if (t.dataset.edit || t.dataset.pedit){
     autosize(t);
     const [id,f] = (t.dataset.edit || t.dataset.pedit).split(":");
@@ -758,12 +943,14 @@ function placeTip(tag){
 }
 document.addEventListener("mouseover", e=>{ const t = e.target.closest && e.target.closest(".mtag"); if (t) placeTip(t); });
 document.addEventListener("focusin", e=>{ if (e.target.classList && e.target.classList.contains("mtag")) placeTip(e.target); });
- document.getElementById("pClose").onclick = closePanel;
+ document.getElementById("pClose").onclick = ()=>closePanel();
+document.addEventListener("submit", e=>{ if (e.target.id==="insForm"){ e.preventDefault(); submitForm(); } });
 document.getElementById("pPrev").onclick = ()=>stepPanel(-1);
 document.getElementById("pNext").onclick = ()=>stepPanel(1);
 document.addEventListener("keydown", e=>{
   const open = document.getElementById("panel").classList.contains("on");
   if (open && e.key==="Escape"){ closePanel(); return; }
+  if (open && state.form) return;
   if (open && !e.target.matches("textarea,input,select") && (e.key==="ArrowRight"||e.key==="ArrowLeft")){ stepPanel(e.key==="ArrowRight"?1:-1); return; }
   if (!open && (e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches("[data-openins]")){ e.preventDefault(); openPanel(e.target.dataset.openins, visibleInsightOrder()); }
 });
@@ -773,7 +960,7 @@ document.getElementById("mfBtn").onclick = e=>{
 };
 
 /* ===================================================================== SYNC */
-const SYNC = { client:null, user:null, meta:{}, dirty:new Set(), timers:{}, pendingRender:false, channel:null };
+const SYNC = { client:null, user:null, meta:{}, dirty:new Set(), cdirty:new Set(), timers:{}, pendingRender:false, channel:null };
 function relTime(iso){
   const s = (Date.now() - new Date(iso)) / 1000;
   if (s < 60) return "just now"; if (s < 3600) return Math.round(s/60)+" min ago";
@@ -820,6 +1007,9 @@ async function startTeam(){
   const cr = await SYNC.client.from("board_content").select("data").eq("id","main").maybeSingle();
   if (cr.error){ setStatus("error","Couldn’t load content: "+cr.error.message); GATE = { kind:"error", msg:"Couldn’t load the research content: "+cr.error.message }; render(); return; }
   if (!cr.data){ setStatus("error","Board content missing"); GATE = { kind:"nocontent" }; render(); return; }
+  CUSTOM = {}; CUSTOM_ON = false;
+  const ci = await SYNC.client.from("board_insights").select("id,data,deleted,created_by,created_at,updated_by,updated_at");
+  if (!ci.error){ CUSTOM_ON = true; ci.data.forEach(r=>{ CUSTOM[r.id] = r; }); }
   setContent(cr.data.data);
   const { data, error } = await SYNC.client.from("board_edits").select("kind,item_id,field,value,updated_by,updated_at");
   if (error){ setStatus("error","Couldn’t load team edits: "+error.message); return; }
@@ -830,6 +1020,12 @@ async function startTeam(){
     .on("postgres_changes", { event:"*", schema:"public", table:"board_edits" }, p=>{
       if (p.eventType === "DELETE") removeRow(p.old); else applyRow(p.new);
       remoteRender();
+    })
+    .on("postgres_changes", { event:"*", schema:"public", table:"board_insights" }, p=>{
+      if (!CUSTOM_ON) return;
+      const id = (p.new && p.new.id) || (p.old && p.old.id); if (!id || SYNC.cdirty.has(id)) return;
+      if (p.eventType === "DELETE") delete CUSTOM[id]; else CUSTOM[id] = p.new;
+      rebuild(); remoteRender();
     })
     .subscribe(st=>{ if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") setStatus("nolive"); else if (st === "SUBSCRIBED") setStatus("synced"); });
   setStatus("synced"); render(true); refreshPanel();
@@ -848,7 +1044,7 @@ function remoteRender(){
   if (a && a.matches && a.matches("textarea.edit, .search")) { SYNC.pendingRender = true; return; }
   render(true); refreshPanel();
 }
-function refreshPanel(){ if (state.panel && document.getElementById("panel").classList.contains("on")) openPanel(state.panel); }
+function refreshPanel(){ if (state.form) return; if (state.panel && !INS_BY_ID[state.panel]) { closePanel(true); return; } if (state.panel && document.getElementById("panel").classList.contains("on")) openPanel(state.panel); }
 function queueWrite(b, id, f, delay){
   if (!SYNC.user) return;
   const key = b+":"+id+":"+f; SYNC.dirty.add(key);
